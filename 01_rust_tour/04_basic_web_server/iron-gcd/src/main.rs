@@ -1,0 +1,113 @@
+extern crate iron;
+// Iron is webserver
+// Tells the language to use the external crate, must be 
+// declared in dependencies.
+#[macro_use] extern crate mime;
+// Mime handles responses
+extern crate router;
+//calling functions on urls
+extern crate urlencoded;
+
+use router::Router;
+use iron::prelude::*;
+use iron::status;
+use std::str::FromStr;
+use urlencoded::UrlEncodedBody;
+
+fn main() {
+    let mut router = Router::new();
+
+    router.get("/", get_form, "root");
+    // when getting rooy, run get form and show root
+    router.post("/gcd", post_gcd, "gcd");
+    println!("Serving on http:localhost:3000...");
+    Iron::new(get_form).http("localhost:3000").unwrap();
+}
+
+// modifying our previous gcd function to interact with the form
+fn post_gcd(request: &mut Request) -> IronResult<Response> {
+    let mut response = Response::new();
+
+    let form_data = match request.get_ref::<UrlEncodedBody>() {
+        Err(e) => {
+            response.set_mut(status::BadRequest);
+            response.set_mut(format!("Error parsing form data: {:?}\n", e));
+            return Ok(response);
+        }
+        Ok(map) => map
+    };
+
+    let unparsed_numbers = match form_data.get("n") {
+        None => {response.set_mut(status::BadRequest);
+                 response.set_mut(format!("form data has no n parameter\n"));
+                 return Ok(response);
+        }
+        
+        Some(nums) => nums
+    };
+
+    let mut numbers = Vec::new();
+    for unparsed in unparsed_numbers {
+        match u64::from_str(&unparsed) {
+            Err(_) => {
+                response.set_mut(status::BadRequest);
+                response.set_mut(
+                    format!("Value for 'n' parameter not a number: {:?}",
+                            unparsed));
+                return Ok(response);
+            }
+            Ok(n) => { numbers.push(n); }
+        }
+    }
+    let mut d = numbers[0];
+    for m in &numbers[1..] {
+        d = gcd(d, *m);
+    }
+
+    response.set_mut(status::Ok);
+    response.set_mut(mime!(Text/Html; Charset=Utf8));
+    response.set_mut(
+        format!("The GCD of {:?} is <b>{}</b>\n",
+                numbers, d));
+    
+    Ok(response)
+}
+
+fn get_form(_request: &mut Request) -> IronResult<Response> {
+    let mut response = Response::new();
+
+    response.set_mut(status::Ok);
+    response.set_mut(mime!(Text/Html; Charset = Utf8));
+    response.set_mut(r#"
+        <title>GCD Calculator</title>
+        <form action="/gcd" method="post">
+            <input type="text" name ="n"/>
+            <input type="text" name ="n"/>
+            <button type="submit">Compute</button>
+        </form>
+    "#);
+
+    Ok(response)
+}
+
+fn gcd(mut n: u64, mut m: u64) -> u64 {
+    //assert statement to validate both integers are greater than 0
+    //semicolons matter, and logical operators are like in java
+    //we asserting with excl sign now i guess. Ok excl sign is macro instead of function
+    //macros are run at compile time. Assertions cannot be skipped unless they are debug_assert!
+    assert!(n != 0 && m != 0);
+    //Good practice not to use parentheses on control structures I guess?
+    while m != 0 {
+        if m < n {
+            // let is for declaring variables, ES6 much?
+            // let is kind of dynamic typing i guess
+            // can declare and instantiate in one move.
+            let t = m;
+            m = n;
+            n = t;
+        }
+        m = m % n;
+    }
+    // statements with no semicolon at the end of a function are returns()
+    n
+}
